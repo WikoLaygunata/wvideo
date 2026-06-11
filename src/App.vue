@@ -1,9 +1,8 @@
 <script setup>
-import { ref, computed, provide, onMounted } from 'vue'
+import { ref, provide } from 'vue'
 import VideoCompressor from './components/VideoCompressor.vue'
 import VideoTrimmer from './components/VideoTrimmer.vue'
 import VideoExtractor from './components/VideoExtractor.vue'
-import VideoToGif from './components/VideoToGif.vue'
 import VideoMerger from './components/VideoMerger.vue'
 import qrisImage from './assets/qris.webp'
 import logoImage from './assets/logo.png'
@@ -12,7 +11,6 @@ const tabComponents = {
   trimmer: VideoTrimmer,
   compressor: VideoCompressor,
   extractor: VideoExtractor,
-  gif: VideoToGif,
   merger: VideoMerger,
 }
 
@@ -134,13 +132,13 @@ provide('showToast', showToast)
           >
         </h2>
         <p class="text-slate-400 text-sm sm:text-base leading-relaxed">
-          Potong durasi video, kompres ukuran, ekstrak audio, hingga konversi ke GIF secara lokal
+          Potong durasi video, kompres ukuran, gabung video, hingga ekstrak audio secara lokal
           menggunakan kekuatan perangkat Anda. Tanpa upload ke server, tanpa batasan, 100% gratis.
         </p>
       </div>
 
       <!-- Navigation Tabs Grid -->
-      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 max-w-5xl mx-auto w-full">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 max-w-4xl mx-auto w-full">
         <button
           @click="currentTab = 'trimmer'"
           :class="[
@@ -162,10 +160,10 @@ provide('showToast', showToast)
         </button>
 
         <button
-          @click="currentTab = 'compressor'"
+          @click="currentTab = 'merger'"
           :class="[
             'flex flex-col items-center justify-center gap-2 p-3 text-sm font-semibold rounded-xl border transition-all duration-200 cursor-pointer',
-            currentTab === 'compressor'
+            currentTab === 'merger'
               ? 'bg-brand-600/20 border-brand-500 text-brand-400 shadow-lg shadow-brand-500/10'
               : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700',
           ]"
@@ -175,10 +173,10 @@ provide('showToast', showToast)
               stroke-linecap="round"
               stroke-linejoin="round"
               stroke-width="2"
-              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+              d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
             />
           </svg>
-          <span class="text-xs text-center">Compressor</span>
+          <span class="text-xs text-center">Merger</span>
         </button>
 
         <button
@@ -201,31 +199,12 @@ provide('showToast', showToast)
           <span class="text-xs text-center">Extractor</span>
         </button>
 
-        <button
-          @click="currentTab = 'gif'"
-          :class="[
-            'flex flex-col items-center justify-center gap-2 p-3 text-sm font-semibold rounded-xl border transition-all duration-200 cursor-pointer',
-            currentTab === 'gif'
-              ? 'bg-brand-600/20 border-brand-500 text-brand-400 shadow-lg shadow-brand-500/10'
-              : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700',
-          ]"
-        >
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-            />
-          </svg>
-          <span class="text-xs text-center">GIF</span>
-        </button>
 
         <button
-          @click="currentTab = 'merger'"
+          @click="currentTab = 'compressor'"
           :class="[
             'flex flex-col items-center justify-center gap-2 p-3 text-sm font-semibold rounded-xl border transition-all duration-200 cursor-pointer',
-            currentTab === 'merger'
+            currentTab === 'compressor'
               ? 'bg-brand-600/20 border-brand-500 text-brand-400 shadow-lg shadow-brand-500/10'
               : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700',
           ]"
@@ -235,10 +214,10 @@ provide('showToast', showToast)
               stroke-linecap="round"
               stroke-linejoin="round"
               stroke-width="2"
-              d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
             />
           </svg>
-          <span class="text-xs text-center">Merger</span>
+          <span class="text-xs text-center">Compressor</span>
         </button>
       </div>
 

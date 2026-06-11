@@ -9,6 +9,7 @@ const isMtSupported = ref(typeof SharedArrayBuffer !== 'undefined')
 let wakeLock = null
 
 const requestWakeLock = async () => {
+  if (wakeLock) return
   if (typeof navigator === 'undefined' || !('wakeLock' in navigator)) return
   try {
     wakeLock = await navigator.wakeLock.request('screen')
@@ -63,7 +64,6 @@ const outputUrl = ref(null)
 const isDragging = ref(false)
 const isCompressing = ref(false)
 const progress = ref(0)
-const statusMessage = ref('')
 const errorMessage = ref('')
 const startTime = ref(0)
 const estimatedTimeRemaining = ref('')
@@ -111,7 +111,6 @@ const estimatedSize = computed(() => {
 
 let worker = null
 let lastEtaUpdateTime = 0
-let lastLogTime = 0
 
 // Initialize Worker
 const initWorker = () => {
@@ -121,16 +120,7 @@ const initWorker = () => {
   worker.onmessage = async (e) => {
     const { type, message, progress: progValue, resultBuffer, mimeType } = e.data
 
-    if (type === 'log') {
-      // Saring log frame/fps bising agar tidak merusak rendering thread UI
-      if (message.includes('frame=') || message.includes('fps=')) return
-
-      const now = Date.now()
-      if (now - lastLogTime >= 800) {
-        statusMessage.value = message
-        lastLogTime = now
-      }
-    } else if (type === 'progress') {
+    if (type === 'progress') {
       // progress is a float between 0 and 1
       progress.value = Math.min(100, Math.max(0, Math.round(progValue * 100)))
 
@@ -147,8 +137,6 @@ const initWorker = () => {
       } else if (progValue === 1) {
         estimatedTimeRemaining.value = 'Selesai'
       }
-    } else if (type === 'status') {
-      statusMessage.value = message
     } else if (type === 'done') {
       isCompressing.value = false
 
@@ -194,7 +182,11 @@ const onFileSelect = (event) => {
   const selectedFile = event.target.files?.[0] || event.dataTransfer?.files?.[0]
   if (!selectedFile) return
 
-  if (!selectedFile.type.startsWith('video/')) {
+  const videoExtensions = ['.mp4', '.mkv', '.mov', '.webm', '.avi', '.m4v', '.3gp', '.flv']
+  const isVideo = selectedFile.type.startsWith('video/') ||
+                  videoExtensions.some(ext => selectedFile.name.toLowerCase().endsWith(ext))
+
+  if (!isVideo) {
     showToast('Format Salah', 'Harap masukkan file video.', 'error')
     return
   }
@@ -233,7 +225,6 @@ const startCompression = async () => {
   errorMessage.value = ''
   isCompressing.value = true
   progress.value = 0
-  statusMessage.value = 'Mempersiapkan FFmpeg...'
   startTime.value = Date.now()
   lastEtaUpdateTime = 0 // Reset ETA timer
   estimatedTimeRemaining.value = 'Menghitung waktu...'
@@ -270,18 +261,6 @@ const startCompression = async () => {
   }
 }
 
-
-
-// Garbage Collection Download
-const handleDownload = () => {
-  // Tunggu sejenak agar browser menginisiasi pengunduhan, lalu hapus objectUrl untuk membebaskan RAM.
-  setTimeout(() => {
-    if (outputUrl.value) {
-      URL.revokeObjectURL(outputUrl.value)
-      showToast('Memori Dibersihkan', 'URL file telah dihapus dari memori browser.', 'info')
-    }
-  }, 5000)
-}
 
 // Cancel / Reset
 const reset = async () => {
@@ -657,7 +636,7 @@ onBeforeUnmount(async () => {
               class="w-8 h-8 rounded-full border-2 border-brand-500 border-t-transparent animate-spin"
             ></div>
             <h4 class="text-sm font-bold text-white">
-              {{ progress === 0 ? (statusMessage || 'Menyiapkan...') : 'Memproses...' }}
+              {{ progress === 0 ? 'Menyiapkan...' : 'Memproses...' }}
             </h4>
           </div>
 
@@ -682,8 +661,12 @@ onBeforeUnmount(async () => {
             >
               Sisa Waktu: {{ estimatedTimeRemaining }}
             </p>
-            <p v-if="progress === 0" class="text-[10px] text-brand-400 mt-3 text-center leading-relaxed max-w-sm mx-auto">
-              💡 Sedang menyiapkan studio media lokal di browser Anda. Unduhan engine ini hanya terjadi sekali di kunjungan pertama.
+            <p
+              v-if="progress === 0"
+              class="text-[10px] text-brand-400 mt-3 text-center leading-relaxed max-w-sm mx-auto"
+            >
+              💡 Sedang menyiapkan studio media lokal di browser Anda. Unduhan engine ini hanya
+              terjadi sekali di kunjungan pertama.
             </p>
             <p class="text-[10px] text-slate-500 mt-2 text-center">
               Pastikan tab browser tetap terbuka selama proses berlangsung.
@@ -715,7 +698,7 @@ onBeforeUnmount(async () => {
         class="bg-slate-950/80 backdrop-blur-sm border border-slate-800/80 rounded-2xl overflow-hidden shadow-2xl"
       >
         <!-- Preview Player -->
-        <div class="aspect-video bg-black relative border-b border-slate-800">
+        <div class="aspect-video max-h-[400px] md:max-h-[450px] bg-black relative border-b border-slate-800 flex items-center justify-center">
           <video :src="outputUrl" controls class="w-full h-full object-contain"></video>
           <div
             class="absolute top-4 right-4 bg-slate-950/80 backdrop-blur border border-slate-800 px-3 py-1.5 rounded-lg flex items-center gap-2"
@@ -766,7 +749,6 @@ onBeforeUnmount(async () => {
             <a
               :href="outputUrl"
               :download="`wvideo_${file?.name || 'video.mp4'}`"
-              @click="handleDownload"
               class="flex-1 block text-center px-6 py-3 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-sm shadow-lg shadow-brand-600/20 transition-all cursor-pointer"
             >
               Simpan Video

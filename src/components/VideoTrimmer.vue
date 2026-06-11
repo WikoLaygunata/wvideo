@@ -1,5 +1,5 @@
 <script setup>
-import { ref, inject, onBeforeUnmount, onMounted, computed, watch } from 'vue'
+import { ref, inject, onBeforeUnmount, onMounted, watch } from 'vue'
 
 const showToast = inject('showToast')
 
@@ -9,6 +9,7 @@ const isMtSupported = ref(typeof SharedArrayBuffer !== 'undefined')
 let wakeLock = null
 
 const requestWakeLock = async () => {
+  if (wakeLock) return
   if (typeof navigator === 'undefined' || !('wakeLock' in navigator)) return
   try {
     wakeLock = await navigator.wakeLock.request('screen')
@@ -45,9 +46,6 @@ const handleBeforeUnload = (e) => {
 
 onMounted(() => {
   if (typeof window !== 'undefined') {
-    if (!window.crossOriginIsolated) {
-      isMtSupported.value = false
-    }
     window.addEventListener('beforeunload', handleBeforeUnload)
     document.addEventListener('visibilitychange', handleVisibilityChange)
   }
@@ -67,14 +65,13 @@ const errorMessage = ref('')
 const processStartTime = ref(0)
 const estimatedTimeRemaining = ref('')
 let lastEtaUpdateTime = 0
-const statusMessage = ref('')
-let lastLogTime = 0
 
 // Video Duration & Seeking States
 const duration = ref(0)
 const startTime = ref(0)
 const endTime = ref(0)
 const trimMode = ref('fast') // 'fast' = -c copy (instan), 'accurate' = re-encode (akurat)
+const trimSpeed = ref('ultrafast')
 const videoPlayer = ref(null)
 
 // Format helper: seconds to MM:SS.mmm
@@ -146,18 +143,7 @@ const initWorker = () => {
   worker.onmessage = async (e) => {
     const { type, message, progress: progValue, resultBuffer, mimeType } = e.data
 
-    if (type === 'log') {
-      // Saring log frame/fps bising agar tidak merusak rendering thread UI
-      if (message.includes('frame=') || message.includes('fps=')) return
-
-      const now = Date.now()
-      if (now - lastLogTime >= 800) {
-        statusMessage.value = message
-        lastLogTime = now
-      }
-    } else if (type === 'status') {
-      statusMessage.value = message
-    } else if (type === 'progress') {
+    if (type === 'progress') {
       progress.value = Math.min(100, Math.max(0, Math.round(progValue * 100)))
       if (progValue > 0 && progValue < 1) {
         const now = Date.now()
@@ -173,6 +159,7 @@ const initWorker = () => {
       }
     } else if (type === 'done') {
       isTrimming.value = false
+      await releaseWakeLock()
 
       const finalBlob = new Blob([resultBuffer], { type: mimeType })
       const downloadUrl = URL.createObjectURL(finalBlob)
@@ -181,12 +168,11 @@ const initWorker = () => {
       trimmedSize.value = finalBlob.size
       progress.value = 100
       showToast('Pemotongan Selesai', 'Video berhasil dipotong!', 'success')
-      await releaseWakeLock()
     } else if (type === 'error') {
       isTrimming.value = false
       errorMessage.value = message
-      showToast('Gagal', 'Terjadi kesalahan saat memotong', 'error')
       await releaseWakeLock()
+      showToast('Gagal', 'Terjadi kesalahan saat memotong', 'error')
     }
   }
 }
@@ -206,7 +192,12 @@ const onFileSelect = (event) => {
   const selectedFile = event.target.files?.[0] || event.dataTransfer?.files?.[0]
   if (!selectedFile) return
 
-  if (!selectedFile.type.startsWith('video/')) {
+  const videoExtensions = ['.mp4', '.mkv', '.mov', '.webm', '.avi', '.m4v', '.3gp', '.flv']
+  const isVideo =
+    selectedFile.type.startsWith('video/') ||
+    videoExtensions.some((ext) => selectedFile.name.toLowerCase().endsWith(ext))
+
+  if (!isVideo) {
     showToast('Format Salah', 'Harap masukkan file video.', 'error')
     return
   }
@@ -248,13 +239,10 @@ const startTrimming = async () => {
   errorMessage.value = ''
   isTrimming.value = true
   progress.value = 0
-  statusMessage.value = 'Mempersiapkan FFmpeg...'
-  lastLogTime = 0
   processStartTime.value = Date.now()
   lastEtaUpdateTime = 0
   estimatedTimeRemaining.value = 'Menghitung waktu...'
 
-  // Request Screen Wake Lock
   await requestWakeLock()
 
   initWorker()
@@ -272,6 +260,7 @@ const startTrimming = async () => {
             start: startTime.value,
             end: endTime.value,
             mode: trimMode.value,
+            speed: trimSpeed.value,
           },
         },
       },
@@ -310,7 +299,6 @@ const reset = async () => {
   fileUrl.value = null
   outputUrl.value = null
   progress.value = 0
-  statusMessage.value = ''
   errorMessage.value = ''
   duration.value = 0
   startTime.value = 0
@@ -444,6 +432,22 @@ onBeforeUnmount(async () => {
             <option value="accurate">Potong Akurat (Re-encoding - Presisi Milidetik)</option>
           </select>
         </div>
+
+        <!-- Encoding Speed Preset Setting (Mode Akurat) -->
+        <div v-if="trimMode === 'accurate'" class="space-y-2">
+          <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider"
+            >Kecepatan (Preset)</label
+          >
+          <select
+            v-model="trimSpeed"
+            class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition-colors cursor-pointer appearance-none"
+          >
+            <option value="ultrafast">Ultrafast (Tercepat, ukuran agak besar)</option>
+            <option value="fast">Fast (Cepat, seimbang)</option>
+            <option value="medium">Medium (Standar, lambat)</option>
+            <option value="slow">Slow (Sangat lambat, ukuran optimal)</option>
+          </select>
+        </div>
       </div>
 
       <!-- Mode explanation panel -->
@@ -553,7 +557,9 @@ onBeforeUnmount(async () => {
         class="bg-slate-950/80 backdrop-blur-sm border border-slate-800/80 rounded-2xl overflow-hidden shadow-2xl flex flex-col"
       >
         <!-- Live seek player -->
-        <div class="aspect-video bg-black relative border-b border-slate-800">
+        <div
+          class="aspect-video max-h-[400px] md:max-h-[450px] bg-black relative border-b border-slate-800 flex items-center justify-center"
+        >
           <video
             ref="videoPlayer"
             :src="fileUrl"
@@ -582,13 +588,13 @@ onBeforeUnmount(async () => {
           <div class="flex items-center gap-3 mt-8 w-full sm:w-auto">
             <button
               @click="reset"
-              class="flex-1 sm:flex-none px-6 py-3 rounded-xl border border-slate-700 text-slate-300 font-bold text-sm hover:bg-slate-800 transition-colors"
+              class="flex-1 sm:flex-none px-6 py-3 rounded-xl border border-slate-700 text-slate-300 font-bold text-sm hover:bg-slate-800 transition-colors cursor-pointer"
             >
               Batal
             </button>
             <button
               @click="startTrimming"
-              class="flex-1 sm:flex-none px-8 py-3 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-sm shadow-lg shadow-brand-600/20 transition-all flex items-center justify-center gap-2"
+              class="flex-1 sm:flex-none px-8 py-3 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-sm shadow-lg shadow-brand-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -645,7 +651,7 @@ onBeforeUnmount(async () => {
               class="w-8 h-8 rounded-full border-2 border-brand-500 border-t-transparent animate-spin"
             ></div>
             <h4 class="text-sm font-bold text-white">
-              {{ progress === 0 ? (statusMessage || 'Menyiapkan...') : 'Memotong video...' }}
+              {{ progress === 0 ? 'Menyiapkan...' : 'Memotong video...' }}
             </h4>
           </div>
 
@@ -672,8 +678,12 @@ onBeforeUnmount(async () => {
             >
               Sisa Waktu: {{ estimatedTimeRemaining }}
             </p>
-            <p v-if="progress === 0" class="text-[10px] text-brand-400 mt-3 text-center leading-relaxed max-w-sm mx-auto">
-              💡 Sedang menyiapkan studio media lokal di browser Anda. Unduhan engine ini hanya terjadi sekali di kunjungan pertama.
+            <p
+              v-if="progress === 0"
+              class="text-[10px] text-brand-400 mt-3 text-center leading-relaxed max-w-sm mx-auto"
+            >
+              💡 Sedang menyiapkan studio media lokal di browser Anda. Unduhan engine ini hanya
+              terjadi sekali di kunjungan pertama.
             </p>
             <p class="text-[10px] text-slate-500 mt-2 text-center">
               Mohon jangan menutup tab browser sampai proses pemotongan selesai.
@@ -705,7 +715,9 @@ onBeforeUnmount(async () => {
         class="bg-slate-950/80 backdrop-blur-sm border border-slate-800/80 rounded-2xl overflow-hidden shadow-2xl"
       >
         <!-- Preview Player -->
-        <div class="aspect-video bg-black relative border-b border-slate-800">
+        <div
+          class="aspect-video max-h-[400px] md:max-h-[450px] bg-black relative border-b border-slate-800 flex items-center justify-center"
+        >
           <video :src="outputUrl" controls class="w-full h-full object-contain"></video>
           <div
             class="absolute top-4 right-4 bg-slate-950/80 backdrop-blur border border-slate-800 px-3 py-1.5 rounded-lg flex items-center gap-2"
