@@ -51,7 +51,7 @@ const showToast = (title, desc, type = 'success') => {
 // FAQ / Guide State
 const faqs = ref([
   {
-    question: 'Bagaimana vcompress menjamin keamanan file video saya?',
+    question: 'Bagaimana wvideo menjamin keamanan file video saya?',
     answer:
       'Semua proses pengerjaan (kompresi, potong, ekstrak audio) berjalan 100% lokal di browsermu menggunakan WebAssembly & JavaScript. Tidak ada file yang dikirim ke server. Kamu bahkan bisa mematikan koneksi internet setelah membuka web ini!',
     isOpen: false,
@@ -97,13 +97,13 @@ provide('showToast', showToast)
           <img
             :src="logoImage"
             class="w-9 h-9 rounded-xl object-cover shadow-lg shadow-brand-500/15 border border-slate-800"
-            alt="vcompress logo"
+            alt="wvideo logo"
           />
           <div>
             <h1
               class="text-lg font-bold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent font-display"
             >
-              vcompress
+              wvideo
             </h1>
             <p class="text-[10px] text-slate-400 font-medium tracking-wide uppercase">
               Client-Side Video Engine
@@ -336,7 +336,7 @@ provide('showToast', showToast)
       <div
         class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500"
       >
-        <p>© 2026 vcompress.</p>
+        <p>© 2026 wvideo.</p>
         <div class="flex items-center gap-4">
           <span
             >Dibuat oleh
@@ -415,7 +415,7 @@ provide('showToast', showToast)
                   d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              FAQ & Panduan vcompress
+              FAQ & Panduan wvideo
             </h3>
             <button
               @click="showFaqModal = false"
@@ -515,7 +515,7 @@ provide('showToast', showToast)
                   clip-rule="evenodd"
                 />
               </svg>
-              Dukung vcompress
+              Dukung wvideo
             </h3>
             <button
               @click="showDonateModal = false"
@@ -535,7 +535,7 @@ provide('showToast', showToast)
           <!-- Body -->
           <div class="p-6 flex flex-col items-center text-center space-y-4">
             <p class="text-xs text-slate-300 leading-relaxed max-w-[280px]">
-              Dukungan Anda sangat berarti untuk membantu biaya pengembangan vcompress agar tetap
+              Dukungan Anda sangat berarti untuk membantu biaya pengembangan wvideo agar tetap
               gratis & tanpa iklan!
             </p>
 

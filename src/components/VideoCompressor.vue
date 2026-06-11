@@ -765,7 +765,7 @@ onBeforeUnmount(async () => {
             </button>
             <a
               :href="outputUrl"
-              :download="`vcompress_${file?.name || 'video.mp4'}`"
+              :download="`wvideo_${file?.name || 'video.mp4'}`"
               @click="handleDownload"
               class="flex-1 block text-center px-6 py-3 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-sm shadow-lg shadow-brand-600/20 transition-all cursor-pointer"
             >
