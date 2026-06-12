@@ -40,6 +40,7 @@ const fileUrl = ref(null)
 const originalSize = ref(0)
 const outputSize = ref(0)
 const outputUrl = ref(null)
+const fileExt = ref('mp4')
 
 const isDragging = ref(false)
 const isExtracting = ref(false)
@@ -148,6 +149,9 @@ const onFileSelect = (event) => {
   originalSize.value = selectedFile.size
   fileUrl.value = URL.createObjectURL(selectedFile)
 
+  const ext = selectedFile.name.split('.').pop() || 'mp4'
+  fileExt.value = ext.toLowerCase()
+
   // Reset states
   outputUrl.value = null
   outputSize.value = 0
@@ -169,7 +173,9 @@ const startExtraction = async () => {
 
   await requestWakeLock()
 
-  initWorker()
+  if (!worker) {
+    initWorker()
+  }
 
   try {
     const arrayBuffer = await file.value.arrayBuffer()
@@ -195,14 +201,20 @@ const startExtraction = async () => {
   }
 }
 
-
+// Alert before unload during active extraction
+const handleBeforeUnload = (e) => {
+  if (isExtracting.value) {
+    e.preventDefault()
+    e.returnValue = '' // Standard browser prompt
+  }
+}
 
 const reset = async () => {
-  if (worker && isExtracting.value) {
+  if (worker) {
     worker.terminate()
     worker = null
-    isExtracting.value = false
   }
+  isExtracting.value = false
 
   await releaseWakeLock()
 
@@ -226,14 +238,6 @@ onBeforeUnmount(async () => {
   }
   await releaseWakeLock()
 })
-
-// Alert before unload during active extraction
-const handleBeforeUnload = (e) => {
-  if (isExtracting.value) {
-    e.preventDefault()
-    e.returnValue = '' // Standard browser prompt
-  }
-}
 
 onMounted(() => {
   if (typeof window !== 'undefined') {
@@ -636,7 +640,7 @@ onMounted(() => {
             </button>
             <a
               :href="outputUrl"
-              :download="`wvideo_extract_${resultMode === 'audio' ? 'audio.mp3' : 'video.mp4'}`"
+              :download="`wvideo_extract_${resultMode === 'audio' ? 'audio.mp3' : `video.${fileExt}`}`"
               class="flex-1 block text-center px-6 py-3 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-sm shadow-lg shadow-brand-600/20 transition-all cursor-pointer"
             >
               Simpan File

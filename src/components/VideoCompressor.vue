@@ -1,5 +1,5 @@
 <script setup>
-import { ref, inject, onBeforeUnmount, onMounted, computed } from 'vue'
+import { ref, inject, onBeforeUnmount, onMounted, computed, watch } from 'vue'
 
 const showToast = inject('showToast')
 
@@ -70,15 +70,33 @@ const estimatedTimeRemaining = ref('')
 
 // Settings
 const settings = ref({
+  mode: 'manual', // 'instant' | 'manual'
   quality: 'medium',
   resolution: 'original',
   audio: 'keep',
   speed: 'ultrafast',
 })
 
+watch(
+  () => settings.value.mode,
+  (newVal) => {
+    if (newVal === 'instant') {
+      settings.value.resolution = 'original'
+      settings.value.audio = 'keep'
+    }
+  },
+)
+
 const estimatedSize = computed(() => {
   if (!file.value) return null
   const original = file.value.size
+
+  if (settings.value.mode === 'instant') {
+    return {
+      min: 'Tergantung jumlah track audio cadangan (Bisa hemat 10% - 60% untuk berkas OBS)',
+      max: formatBytes(original),
+    }
+  }
 
   let qFactor = 0.5 // medium
   if (settings.value.quality === 'high') qFactor = 0.8
@@ -183,8 +201,9 @@ const onFileSelect = (event) => {
   if (!selectedFile) return
 
   const videoExtensions = ['.mp4', '.mkv', '.mov', '.webm', '.avi', '.m4v', '.3gp', '.flv']
-  const isVideo = selectedFile.type.startsWith('video/') ||
-                  videoExtensions.some(ext => selectedFile.name.toLowerCase().endsWith(ext))
+  const isVideo =
+    selectedFile.type.startsWith('video/') ||
+    videoExtensions.some((ext) => selectedFile.name.toLowerCase().endsWith(ext))
 
   if (!isVideo) {
     showToast('Format Salah', 'Harap masukkan file video.', 'error')
@@ -232,7 +251,9 @@ const startCompression = async () => {
   // Request Screen Wake Lock to prevent sleeping
   await requestWakeLock()
 
-  initWorker()
+  if (!worker) {
+    initWorker()
+  }
 
   try {
     const arrayBuffer = await file.value.arrayBuffer()
@@ -244,6 +265,7 @@ const startCompression = async () => {
           fileData: arrayBuffer,
           fileName: file.value.name.replace(/\s+/g, '_'),
           options: {
+            mode: settings.value.mode,
             quality: settings.value.quality,
             resolution: settings.value.resolution,
             audio: settings.value.audio,
@@ -261,14 +283,13 @@ const startCompression = async () => {
   }
 }
 
-
 // Cancel / Reset
 const reset = async () => {
-  if (worker && isCompressing.value) {
+  if (worker) {
     worker.terminate()
     worker = null
-    isCompressing.value = false
   }
+  isCompressing.value = false
 
   await releaseWakeLock()
 
@@ -317,8 +338,143 @@ onBeforeUnmount(async () => {
       </div>
 
       <div class="p-5 space-y-5 flex-1">
-        <!-- Quality Setting -->
+        <!-- Metode Kompresi Selector -->
         <div class="space-y-2">
+          <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider"
+            >Metode Kompresi</label
+          >
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              @click="settings.mode = 'instant'"
+              class="flex flex-col items-center justify-center p-3 rounded-xl border border-slate-850 cursor-pointer transition-all hover:bg-slate-800/50 text-center"
+              :class="
+                settings.mode === 'instant'
+                  ? 'bg-brand-600/20 border-brand-500 shadow-sm shadow-brand-500/10'
+                  : 'bg-slate-950 border-slate-900'
+              "
+            >
+              <span
+                class="text-xs font-bold"
+                :class="settings.mode === 'instant' ? 'text-brand-400' : 'text-slate-400'"
+                >Instan</span
+              >
+              <span class="text-[9px] text-slate-500 mt-0.5 leading-tight"
+                >Salin Stream (Sangat Cepat)</span
+              >
+            </button>
+            <button
+              type="button"
+              @click="settings.mode = 'manual'"
+              class="flex flex-col items-center justify-center p-3 rounded-xl border border-slate-850 cursor-pointer transition-all hover:bg-slate-800/50 text-center"
+              :class="
+                settings.mode === 'manual'
+                  ? 'bg-brand-600/20 border-brand-500 shadow-sm shadow-brand-500/10'
+                  : 'bg-slate-950 border-slate-900'
+              "
+            >
+              <span
+                class="text-xs font-bold"
+                :class="settings.mode === 'manual' ? 'text-brand-400' : 'text-slate-400'"
+                >Manual</span
+              >
+              <span class="text-[9px] text-slate-500 mt-0.5 leading-tight"
+                >Render Ulang (Kompresi Tinggi)</span
+              >
+            </button>
+          </div>
+        </div>
+
+        <!-- Mode Explanation Card -->
+        <!-- Explanation for Instant Mode -->
+        <div
+          v-if="settings.mode === 'instant'"
+          class="bg-emerald-950/20 border border-emerald-900/40 rounded-xl p-3.5 space-y-2.5"
+        >
+          <div class="flex items-center gap-2 text-emerald-400">
+            <svg
+              class="w-3.5 h-3.5 flex-shrink-0"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2.5"
+                d="M13 10V3L4 14h7v7l9-11h-7z"
+              />
+            </svg>
+            <span class="text-[10px] font-bold uppercase tracking-wider">Detail Mode Instan</span>
+          </div>
+          <div class="text-[10px] text-slate-400 space-y-2 leading-relaxed font-medium">
+            <p>
+              <strong class="text-slate-300">Cara Kerja:</strong> Menyalin langsung stream video
+              utama dan stream audio utama saja ke wadah baru tanpa melakukan proses rendering ulang
+              (re-encoding). Proses berjalan luar biasa cepat (hitungan detik).
+            </p>
+            <p>
+              <strong class="text-slate-300">Mengapa Ukuran Bisa Berkurang?</strong>
+              Mode ini tidak melakukan kompresi data pada gambar video maupun suara. Namun, mode ini
+              bekerja dengan cara menyalin **hanya track video utama dan track audio utama (track
+              pertama)**, serta **membuang semua track audio cadangan/tambahan** (seperti track
+              microphone terpisah, discord, musik, dll pada rekaman multi-track OBS/Shadowplay). Hal
+              ini yang menyebabkan ukuran file berkurang signifikan secara instan tanpa menurunkan
+              kualitas asli sedikit pun (100% orisinil).
+            </p>
+            <p>
+              <strong class="text-slate-300">Rekomendasi Penggunaan:</strong>
+              Sangat cocok untuk meremux/mengurangi ukuran video rekaman layar (OBS/Shadowplay) yang
+              memiliki banyak track audio cadangan yang tidak diperlukan, serta untuk memperbaiki
+              indeks container video agar dapat diputar dengan lancar.
+            </p>
+            <p class="text-amber-400/90">
+              ⚠️ <strong class="text-amber-400">Disclaimer:</strong> Jika video asal hanya memiliki
+              satu track audio standar, ukuran berkas hasil penyalinan akan tetap sama dengan
+              aslinya.
+            </p>
+          </div>
+        </div>
+
+        <!-- Explanation for Manual Mode -->
+        <div v-else class="bg-blue-950/20 border border-blue-900/40 rounded-xl p-3.5 space-y-2.5">
+          <div class="flex items-center gap-2 text-blue-400">
+            <svg
+              class="w-3.5 h-3.5 flex-shrink-0"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2.5"
+                d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+              />
+            </svg>
+            <span class="text-[10px] font-bold uppercase tracking-wider">Detail Mode Manual</span>
+          </div>
+          <div class="text-[10px] text-slate-400 space-y-2 leading-relaxed font-medium">
+            <p>
+              <strong class="text-slate-300">Cara Kerja:</strong> Merender ulang (re-encode) setiap
+              frame menggunakan standard encoder H.264 (<code class="bg-slate-900 px-1 rounded"
+                >libx264</code
+              >) berdasarkan parameter CRF yang Anda tentukan.
+            </p>
+            <p>
+              <strong class="text-slate-300">Rekomendasi:</strong> Digunakan untuk menekan ukuran
+              file sekecil mungkin dari segala sumber video (HP, kamera, WhatsApp), atau ketika Anda
+              ingin memperkecil resolusi video.
+            </p>
+            <p class="text-amber-400/90">
+              ⚠️ <strong class="text-amber-400">Disclaimer:</strong> Proses ini membutuhkan daya
+              CPU/RAM yang tinggi dan waktu pemrosesan yang lebih lama.
+            </p>
+          </div>
+        </div>
+
+        <!-- Quality Setting (Manual Mode Only) -->
+        <div v-if="settings.mode === 'manual'" class="space-y-2">
           <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider"
             >Kualitas Video (CRF)</label
           >
@@ -371,8 +527,8 @@ onBeforeUnmount(async () => {
           </div>
         </div>
 
-        <!-- Resolution Setting -->
-        <div class="space-y-2">
+        <!-- Resolution Setting (Manual Mode Only) -->
+        <div v-if="settings.mode === 'manual'" class="space-y-2">
           <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider"
             >Resolusi / Skala</label
           >
@@ -387,8 +543,8 @@ onBeforeUnmount(async () => {
           </select>
         </div>
 
-        <!-- Audio Setting -->
-        <div class="space-y-2">
+        <!-- Audio Setting (Manual Mode Only) -->
+        <div v-if="settings.mode === 'manual'" class="space-y-2">
           <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider"
             >Audio Output</label
           >
@@ -403,8 +559,8 @@ onBeforeUnmount(async () => {
           </select>
         </div>
 
-        <!-- Encoding Speed Preset Setting -->
-        <div class="space-y-2">
+        <!-- Encoding Speed Preset Setting (Manual Mode Only) -->
+        <div v-if="settings.mode === 'manual'" class="space-y-2">
           <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider"
             >Kecepatan (Preset)</label
           >
@@ -421,6 +577,35 @@ onBeforeUnmount(async () => {
       </div>
 
       <!-- Disclaimer RAM & Fallback -->
+      <div
+        v-if="settings.mode === 'instant'"
+        class="p-4 bg-emerald-500/10 border-t border-emerald-500/20"
+      >
+        <div class="flex items-start gap-2.5">
+          <svg
+            class="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2.5"
+              d="M13 10V3L4 14h7v7l9-11h-7z"
+            />
+          </svg>
+          <div>
+            <h4 class="text-xs font-bold text-emerald-500">Mode Instan Aktif</h4>
+            <p class="text-[10px] text-emerald-400/80 leading-relaxed mt-0.5">
+              Video akan disalin ulang langsung tanpa re-encoding. Proses selesai dalam hitungan
+              detik dengan kualitas asli 100% terjaga. Berguna untuk memperbaiki file container
+              (remuxing) atau menghapus/mengompres audio secara cepat.
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div v-if="!isMtSupported" class="p-4 bg-rose-500/10 border-t border-rose-500/20">
         <div class="flex items-start gap-2.5">
           <svg
@@ -565,7 +750,10 @@ onBeforeUnmount(async () => {
           </svg>
           <p class="text-xs text-slate-400">
             Estimasi akhir:
-            <span class="text-brand-300 font-bold ml-1"
+            <span v-if="settings.mode === 'instant'" class="text-brand-300 font-bold ml-1"
+              >{{ estimatedSize.min }} (Maks: {{ estimatedSize.max }})</span
+            >
+            <span v-else class="text-brand-300 font-bold ml-1"
               >~{{ estimatedSize.min }} - {{ estimatedSize.max }}</span
             >
           </p>
@@ -643,7 +831,13 @@ onBeforeUnmount(async () => {
           <div class="w-full max-w-md">
             <div class="flex justify-between text-xs font-bold mb-2">
               <span class="text-brand-400">Progres Kompresi</span>
-              <span class="text-white">{{ progress }}%</span>
+              <span class="text-white">
+                {{
+                  settings.quality === 'instant' && progress < 100
+                    ? 'Menyalin Instan...'
+                    : `${progress}%`
+                }}
+              </span>
             </div>
             <div
               class="h-2.5 w-full bg-slate-950 rounded-full overflow-hidden border border-slate-800"
@@ -698,7 +892,9 @@ onBeforeUnmount(async () => {
         class="bg-slate-950/80 backdrop-blur-sm border border-slate-800/80 rounded-2xl overflow-hidden shadow-2xl"
       >
         <!-- Preview Player -->
-        <div class="aspect-video max-h-[400px] md:max-h-[450px] bg-black relative border-b border-slate-800 flex items-center justify-center">
+        <div
+          class="aspect-video max-h-[400px] md:max-h-[450px] bg-black relative border-b border-slate-800 flex items-center justify-center"
+        >
           <video :src="outputUrl" controls class="w-full h-full object-contain"></video>
           <div
             class="absolute top-4 right-4 bg-slate-950/80 backdrop-blur border border-slate-800 px-3 py-1.5 rounded-lg flex items-center gap-2"
@@ -733,7 +929,8 @@ onBeforeUnmount(async () => {
                 <p
                   class="text-[10px] text-brand-300/80 mt-1 font-semibold border-t border-brand-500/20 pt-1"
                 >
-                  Hemat {{ (100 - (compressedSize / originalSize) * 100).toFixed(1) }}%
+                  {{ compressedSize < originalSize ? 'Hemat' : 'Bertambah' }}
+                  {{ Math.abs(100 - (compressedSize / originalSize) * 100).toFixed(1) }}%
                 </p>
               </div>
             </div>

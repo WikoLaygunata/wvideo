@@ -70,7 +70,7 @@ let lastEtaUpdateTime = 0
 const duration = ref(0)
 const startTime = ref(0)
 const endTime = ref(0)
-const trimMode = ref('fast') // 'fast' = -c copy (instan), 'accurate' = re-encode (akurat)
+const trimMode = ref('accurate') // 'accurate' = re-encode (akurat)
 const trimSpeed = ref('ultrafast')
 const videoPlayer = ref(null)
 
@@ -128,8 +128,10 @@ watch(endTime, (newVal) => {
 const onVideoMetadata = () => {
   if (videoPlayer.value) {
     duration.value = videoPlayer.value.duration
-    endTime.value = videoPlayer.value.duration
-    startTime.value = 0
+    if (endTime.value === 0) {
+      endTime.value = videoPlayer.value.duration
+      startTime.value = 0
+    }
   }
 }
 
@@ -245,7 +247,9 @@ const startTrimming = async () => {
 
   await requestWakeLock()
 
-  initWorker()
+  if (!worker) {
+    initWorker()
+  }
 
   try {
     const arrayBuffer = await file.value.arrayBuffer()
@@ -284,11 +288,11 @@ const adjustTrimming = () => {
 
 // Cancel / Reset
 const reset = async () => {
-  if (worker && isTrimming.value) {
+  if (worker) {
     worker.terminate()
     worker = null
-    isTrimming.value = false
   }
+  isTrimming.value = false
 
   await releaseWakeLock()
 
@@ -342,76 +346,87 @@ onBeforeUnmount(async () => {
       <div class="p-5 space-y-5 flex-1">
         <!-- Range Inputs (Hidden / Disabled if no file) -->
         <div v-if="file" class="space-y-4">
-          <!-- Start Time Picker -->
-          <div class="space-y-2">
-            <div class="flex justify-between items-center">
-              <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider"
-                >Awal Pemotongan</label
-              >
-              <span class="text-xs font-bold text-brand-400 font-mono">{{
-                formatTimeSeconds(startTime)
-              }}</span>
-            </div>
-            <input
-              type="range"
-              v-model.number="startTime"
-              min="0"
-              :max="duration"
-              step="0.05"
-              class="w-full accent-brand-500 bg-slate-800 h-1 rounded-lg appearance-none cursor-pointer"
-            />
-            <div class="flex gap-2">
+          <div v-if="duration > 0" class="space-y-4">
+            <!-- Start Time Picker -->
+            <div class="space-y-2">
+              <div class="flex justify-between items-center">
+                <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider"
+                  >Awal Pemotongan</label
+                >
+                <span class="text-xs font-bold text-brand-400 font-mono">{{
+                  formatTimeSeconds(startTime)
+                }}</span>
+              </div>
               <input
-                type="number"
+                type="range"
                 v-model.number="startTime"
                 min="0"
-                :max="endTime"
-                step="0.1"
-                class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono text-center"
+                :max="duration"
+                step="0.05"
+                class="w-full accent-brand-500 bg-slate-800 h-1 rounded-lg appearance-none cursor-pointer"
               />
-              <span class="text-slate-500 self-center text-xs">detik</span>
+              <div class="flex gap-2">
+                <input
+                  type="number"
+                  v-model.number="startTime"
+                  min="0"
+                  :max="endTime"
+                  step="0.1"
+                  class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono text-center"
+                />
+                <span class="text-slate-500 self-center text-xs">detik</span>
+              </div>
             </div>
-          </div>
 
-          <!-- End Time Picker -->
-          <div class="space-y-2">
-            <div class="flex justify-between items-center">
-              <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider"
-                >Akhir Pemotongan</label
-              >
-              <span class="text-xs font-bold text-brand-400 font-mono">{{
-                formatTimeSeconds(endTime)
+            <!-- End Time Picker -->
+            <div class="space-y-2">
+              <div class="flex justify-between items-center">
+                <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider"
+                  >Akhir Pemotongan</label
+                >
+                <span class="text-xs font-bold text-brand-400 font-mono">{{
+                  formatTimeSeconds(endTime)
+                }}</span>
+              </div>
+              <input
+                type="range"
+                v-model.number="endTime"
+                min="0"
+                :max="duration"
+                step="0.05"
+                class="w-full accent-brand-500 bg-slate-800 h-1 rounded-lg appearance-none cursor-pointer"
+              />
+              <div class="flex gap-2">
+                <input
+                  type="number"
+                  v-model.number="endTime"
+                  :min="startTime"
+                  :max="duration"
+                  step="0.1"
+                  class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono text-center"
+                />
+                <span class="text-slate-500 self-center text-xs">detik</span>
+              </div>
+            </div>
+
+            <!-- Selected Duration summary -->
+            <div
+              class="bg-slate-950 border border-slate-800/80 rounded-xl p-3 flex justify-between text-xs"
+            >
+              <span class="text-slate-400">Total Durasi Potong:</span>
+              <span class="text-white font-bold font-mono">{{
+                formatTimeSeconds(endTime - startTime)
               }}</span>
             </div>
-            <input
-              type="range"
-              v-model.number="endTime"
-              min="0"
-              :max="duration"
-              step="0.05"
-              class="w-full accent-brand-500 bg-slate-800 h-1 rounded-lg appearance-none cursor-pointer"
-            />
-            <div class="flex gap-2">
-              <input
-                type="number"
-                v-model.number="endTime"
-                :min="startTime"
-                :max="duration"
-                step="0.1"
-                class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono text-center"
-              />
-              <span class="text-slate-500 self-center text-xs">detik</span>
-            </div>
           </div>
-
-          <!-- Selected Duration summary -->
           <div
-            class="bg-slate-950 border border-slate-800/80 rounded-xl p-3 flex justify-between text-xs"
+            v-else
+            class="text-center py-6 text-xs text-slate-500 flex items-center justify-center gap-2"
           >
-            <span class="text-slate-400">Total Durasi Potong:</span>
-            <span class="text-white font-bold font-mono">{{
-              formatTimeSeconds(endTime - startTime)
-            }}</span>
+            <div
+              class="w-4 h-4 rounded-full border-2 border-brand-500 border-t-transparent animate-spin"
+            ></div>
+            <span>Memuat metadata video...</span>
           </div>
         </div>
 
@@ -419,22 +434,8 @@ onBeforeUnmount(async () => {
           Silakan upload video terlebih dahulu untuk membuka parameter pemotongan.
         </div>
 
-        <!-- Trim Mode Option -->
+        <!-- Encoding Speed Preset Setting -->
         <div class="space-y-2">
-          <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider"
-            >Metode Pemotongan</label
-          >
-          <select
-            v-model="trimMode"
-            class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition-colors cursor-pointer appearance-none"
-          >
-            <option value="fast">Potong Instan (No Re-encoding - Cepat & Ori)</option>
-            <option value="accurate">Potong Akurat (Re-encoding - Presisi Milidetik)</option>
-          </select>
-        </div>
-
-        <!-- Encoding Speed Preset Setting (Mode Akurat) -->
-        <div v-if="trimMode === 'accurate'" class="space-y-2">
           <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider"
             >Kecepatan (Preset)</label
           >
@@ -451,32 +452,7 @@ onBeforeUnmount(async () => {
       </div>
 
       <!-- Mode explanation panel -->
-      <div v-if="trimMode === 'fast'" class="p-4 bg-emerald-500/10 border-t border-emerald-500/20">
-        <div class="flex items-start gap-2.5">
-          <svg
-            class="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2.5"
-              d="M13 10V3L4 14h7v7l9-11h-7z"
-            />
-          </svg>
-          <div>
-            <h4 class="text-xs font-bold text-emerald-500">Mode Instan Aktif</h4>
-            <p class="text-[10px] text-emerald-400/80 leading-relaxed mt-0.5">
-              Video hanya diiris tanpa rendering ulang. Selesai dalam < 1 detik, kualitas 100% sama
-              dengan aslinya. *Catatan: Awal pemotongan disesuaikan ke keyframe terdekat.*
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div v-else class="p-4 bg-amber-500/10 border-t border-amber-500/20">
+      <div class="p-4 bg-amber-500/10 border-t border-amber-500/20">
         <div class="flex items-start gap-2.5">
           <svg
             class="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5"
@@ -492,10 +468,11 @@ onBeforeUnmount(async () => {
             />
           </svg>
           <div>
-            <h4 class="text-xs font-bold text-amber-500">Mode Akurat Aktif</h4>
+            <h4 class="text-xs font-bold text-amber-500">Info Pemotongan Video</h4>
             <p class="text-[10px] text-amber-500/80 leading-relaxed mt-0.5">
-              Melakukan render ulang video secara lokal. Pemotongan presisi tepat pada milidetik
-              yang ditentukan, namun memakan waktu lebih lama serta membebani RAM/CPU.
+              Pemotongan dilakukan secara lokal dengan merender ulang (re-encoding) video secara
+              presisi tepat pada milidetik yang ditentukan, demi menghindari hasil video
+              rusak/corrupt.
             </p>
           </div>
         </div>
@@ -658,9 +635,7 @@ onBeforeUnmount(async () => {
           <div class="w-full max-w-md">
             <div class="flex justify-between text-xs font-bold mb-2">
               <span class="text-brand-400">Progres Pemotongan</span>
-              <span class="text-white">
-                {{ trimMode === 'fast' && progress < 100 ? 'Memotong Instan...' : `${progress}%` }}
-              </span>
+              <span class="text-white"> {{ progress }}% </span>
             </div>
             <div
               class="h-2.5 w-full bg-slate-950 rounded-full overflow-hidden border border-slate-800"
@@ -754,8 +729,8 @@ onBeforeUnmount(async () => {
                 <p
                   class="text-[10px] text-brand-300/80 mt-1 font-semibold border-t border-brand-500/20 pt-1"
                 >
-                  Ukuran Baru (Berkurang
-                  {{ (100 - (trimmedSize / originalSize) * 100).toFixed(1) }}%)
+                  Ukuran Baru ({{ trimmedSize < originalSize ? 'Berkurang' : 'Bertambah' }}
+                  {{ Math.abs(100 - (trimmedSize / originalSize) * 100).toFixed(1) }}%)
                 </p>
               </div>
             </div>

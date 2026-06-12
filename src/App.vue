@@ -63,7 +63,7 @@ const faqs = ref([
   {
     question: 'Apakah hasil potong video (Trimmer) akan menurunkan kualitas?',
     answer:
-      'Tidak! Fitur Trimmer kami menggunakan metode stream copy (-c copy) di mana video hanya diiris tanpa melakukan proses re-encoding ulang, sehingga kualitas asli tetap terjaga dan prosesnya instan.',
+      'Secara default, wvideo akan melakukan proses encoding ulang (re-encode) secara presisi agar video tidak rusak/corrupt pada bagian awal/akhir potongan. Kualitas visual tetap terjaga dengan baik menggunakan standar kompresi video H.264.',
     isOpen: false,
   },
 ])
@@ -198,7 +198,6 @@ provide('showToast', showToast)
           </svg>
           <span class="text-xs text-center">Extractor</span>
         </button>
-
 
         <button
           @click="currentTab = 'compressor'"

@@ -116,30 +116,36 @@ const onFileSelect = async (event) => {
 
   isExtracting.value = true // Kunci state
   
-  for (const file of validFiles) {
-    // Jika di tengah-tengah loop user menekan reset, batalkan sisa loop
-    if (isExtracting.value === false) break 
-    
-    try {
-      const meta = await extractVideoMetadata(file)
-      files.value.push({
-        id: Math.random().toString(36).substr(2, 9),
-        file,
-        name: file.name,
-        size: file.size,
-        width: meta.width,
-        height: meta.height,
-        duration: meta.duration,
-        url: meta.url,
-      })
-    } catch (e) {
-      console.error(e)
-      showToast('Gagal', `Gagal membaca file ${file.name}`, 'warning')
-    }
-  }
+  try {
+    // Jalankan ekstraksi metadata secara PARALEL
+    const metaPromises = Array.from(validFiles).map(async (file) => {
+      try {
+        const meta = await extractVideoMetadata(file)
+        return {
+          id: Math.random().toString(36).substr(2, 9),
+          file,
+          name: file.name,
+          size: file.size,
+          width: meta.width,
+          height: meta.height,
+          duration: meta.duration,
+          url: meta.url,
+        }
+      } catch (e) {
+        console.error(e)
+        showToast('Gagal', `Gagal membaca file ${file.name}`, 'warning')
+        return null // skip jika ada 1 file yang korup metadatanya
+      }
+    })
 
-  isExtracting.value = false // Buka kunci state
-  if (event.target) event.target.value = ''
+    const resolvedFiles = await Promise.all(metaPromises)
+    files.value.push(...resolvedFiles.filter(f => f !== null))
+  } catch (err) {
+    showToast('Gagal', 'Terjadi kesalahan membaca klip video.', 'error')
+  } finally {
+    isExtracting.value = false // Buka kunci state
+    if (event.target) event.target.value = ''
+  }
 }
 
 // Queue Management
@@ -223,7 +229,9 @@ const startMerging = async () => {
   lastEtaUpdateTime = 0
   estimatedTimeRemaining.value = 'Menghitung waktu...'
 
-  initWorker()
+  if (!worker) {
+    initWorker()
+  }
 
   try {
     const filePayloads = []
@@ -231,7 +239,7 @@ const startMerging = async () => {
       const arrBuf = await f.file.arrayBuffer()
       filePayloads.push({
         fileData: arrBuf,
-        fileName: f.name.replace(/\s+/g, '_'),
+        fileName: f.name,
       })
     }
 
@@ -255,11 +263,11 @@ const startMerging = async () => {
 const reset = () => {
   isExtracting.value = false // Batalkan semua loop upload yang tersisa
   
-  if (worker && isProcessing.value) {
+  if (worker) {
     worker.terminate()
     worker = null
-    isProcessing.value = false
   }
+  isProcessing.value = false
 
   if (outputUrl.value) {
     URL.revokeObjectURL(outputUrl.value)
